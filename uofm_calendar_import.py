@@ -332,7 +332,7 @@ def parse_deadlines_drop_withdraw(dates_html: str) -> Tuple[Optional[date], Opti
         # Examples:
         #   "FULL  -  January 20 - February 2, 2026"
         #   "FULL  -  February 3 - April 11, 2026"
-        rest = re.sub(r"^FULL\b", "", line).strip()
+        rest = re.sub(r"^\s*FULL\b", "", line).strip()
         rest = re.sub(r"^[\s\-–:]+", "", rest).strip()
         rest = rest.replace("–", "-")
         rest = normalize_whitespace(rest)
