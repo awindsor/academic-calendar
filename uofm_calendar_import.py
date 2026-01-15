@@ -282,9 +282,10 @@ def parse_deadlines_drop_withdraw(dates_html: str) -> Tuple[Optional[date], Opti
       (last_day_drop_no_grade, last_day_withdraw_W)
     """
     soup = BeautifulSoup(dates_html, "html.parser")
-    txt = soup.get_text("\n")
+    print(f"Soup: {soup}")
 
-    print(txt)
+    txt = soup.get_text("\n")
+    print(f"txt: {txt}")
 
     raw_lines = [normalize_whitespace(l) for l in txt.splitlines()]
     raw_lines = [l for l in raw_lines if l]
