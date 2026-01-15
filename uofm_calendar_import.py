@@ -281,6 +281,7 @@ def parse_deadlines_drop_withdraw(dates_html: str) -> Tuple[Optional[date], Opti
     Returns:
       (last_day_drop_no_grade, last_day_withdraw_W)
     """
+    print("Starting Parsing Deadlines")
     soup = BeautifulSoup(dates_html, "html.parser")
     print(f"Soup: {soup}")
 
