@@ -386,26 +386,47 @@ def get_calendar_service(credentials_path: str = "credentials.json", token_path:
 
 def upsert_event(service, calendar_id: str, summary: str, start_d: date, end_inclusive: date, description: str = ""):
     """
-    Idempotency strategy:
-    - Use a deterministic "iCalUID" based on calendar_id + summary + start date.
-    - If the same script is re-run, we try to locate by iCalUID and update; otherwise insert.
+    Insert the event only if it does not already exist.
 
-    Note: Google Calendar API lets you set "iCalUID" on insert.
+    Existence test:
+      - Any event in the nearby window with the same summary
+      - AND same all-day start date
+      - AND same all-day end date (Google stores all-day end as exclusive)
+
+    If found: do nothing (skip).
+    If not found: insert.
+
+    Note:
+    - This avoids duplicates on re-runs.
+    - It also means if you change details later (description, etc.), this will not update old events.
+      If you want update behavior, see the optional "update-if-exists" section below.
     """
-    ical_uid = f"uofm-{calendar_id}-{summary}-{start_d.isoformat()}@local".replace(" ", "_")
+    # Google all-day end is exclusive
+    desired_start = start_d.isoformat()
+    desired_end_excl = (end_inclusive + timedelta(days=1)).isoformat()
 
-    # Search by iCalUID is not directly supported; we approximate by timeMin/timeMax and matching iCalUID.
-    time_min = datetime.combine(start_d - timedelta(days=1), datetime.min.time()).isoformat() + "Z"
-    time_max = datetime.combine(end_inclusive + timedelta(days=2), datetime.min.time()).isoformat() + "Z"
+    # Search in a small window around the event
+    time_min = datetime.combine(start_d - timedelta(days=2), datetime.min.time()).isoformat() + "Z"
+    time_max = datetime.combine(end_inclusive + timedelta(days=3), datetime.min.time()).isoformat() + "Z"
+
     events = service.events().list(
         calendarId=calendar_id,
         timeMin=time_min,
         timeMax=time_max,
         singleEvents=True,
-        maxResults=50,
+        maxResults=250,
     ).execute().get("items", [])
 
-    existing = next((e for e in events if e.get("iCalUID") == ical_uid), None)
+    # If an event already exists with same summary + same all-day dates, skip creating.
+    for e in events:
+        if e.get("summary") != summary:
+            continue
+
+        s = (e.get("start") or {}).get("date")
+        en = (e.get("end") or {}).get("date")  # exclusive for all-day events
+        if s == desired_start and en == desired_end_excl:
+            print(f"Exists:  {summary} ({start_d}..{end_inclusive})")
+            return
 
     body = {
         "summary": summary,
@@ -413,17 +434,11 @@ def upsert_event(service, calendar_id: str, summary: str, start_d: date, end_inc
         "transparency": "transparent",
         "visibility": "default",
         "eventType": "default",
-        "iCalUID": ical_uid,
         **to_google_allday(start_d, end_inclusive),
     }
 
-    if existing:
-        service.events().update(calendarId=calendar_id, eventId=existing["id"], body=body).execute()
-        print(f"Updated: {summary} ({start_d}..{end_inclusive})")
-    else:
-        service.events().insert(calendarId=calendar_id, body=body).execute()
-        print(f"Inserted: {summary} ({start_d}..{end_inclusive})")
-
+    service.events().insert(calendarId=calendar_id, body=body).execute()
+    print(f"Inserted: {summary} ({start_d}..{end_inclusive})")
 
 # -----------------------------
 # Week labeling logic
