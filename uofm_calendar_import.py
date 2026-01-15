@@ -600,8 +600,8 @@ def build_term_events(year: int, semester: str) -> Dict[str, object]:
             dd_url_used = u
             if args.debug:
                 with open("debug_dates_deadlines.html", "w", encoding="utf-8") as f:
-                f.write(dd_html)
-                print("Wrote debug_dates_deadlines.html")
+                    f.write(dd_html)
+                    print("Wrote debug_dates_deadlines.html")
             break
         except Exception:
             continue
