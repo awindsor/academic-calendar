@@ -301,6 +301,7 @@ def parse_deadlines_drop_withdraw(dates_html: str) -> Tuple[Optional[date], Opti
 
     for l in lines:
         # Section toggles (these strings appear on the page)
+        strip_bullets(l)
         if re.search(r"Drop Period", l, re.IGNORECASE):
             in_drop = True
             in_withdraw = False
@@ -311,10 +312,10 @@ def parse_deadlines_drop_withdraw(dates_html: str) -> Tuple[Optional[date], Opti
             continue
 
         # Grab the first FULL line in each section (ignore WIN, 1ST, 2ND, TN eCampus, etc.)
-        if in_drop and full_drop_line is None and re.match(r"^FULL\b", l):
+        if in_drop and full_drop_line is None and re.match(r"^\s*FULL\b", l):
             full_drop_line = l
             continue
-        if in_withdraw and full_withdraw_line is None and re.match(r"^FULL\b", l):
+        if in_withdraw and full_withdraw_line is None and re.match(r"^\s*FULL\b", l):
             full_withdraw_line = l
             continue
 
