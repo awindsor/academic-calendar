@@ -305,10 +305,12 @@ def parse_deadlines_drop_withdraw(dates_html: str) -> Tuple[Optional[date], Opti
         if re.search(r"Drop Period", l, re.IGNORECASE):
             in_drop = True
             in_withdraw = False
+            print(l)
             continue
         if re.search(r"Withdrawal Period", l, re.IGNORECASE):
             in_drop = False
             in_withdraw = True
+            print(l)
             continue
 
         # Grab the first FULL line in each section (ignore WIN, 1ST, 2ND, TN eCampus, etc.)
