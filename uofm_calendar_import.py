@@ -286,7 +286,7 @@ def parse_deadlines_drop_withdraw(dates_html: str) -> Tuple[Optional[date], Opti
     print(f"Soup: {soup}")
 
     txt = soup.get_text("\n")
-    print(f"txt: {txt}")
+    #print(f"txt: {txt}")
 
     raw_lines = [normalize_whitespace(l) for l in txt.splitlines()]
     raw_lines = [l for l in raw_lines if l]
@@ -598,6 +598,10 @@ def build_term_events(year: int, semester: str) -> Dict[str, object]:
         try:
             dd_html = fetch_html(u)
             dd_url_used = u
+            if args.debug:
+                with open("debug_dates_deadlines.html", "w", encoding="utf-8") as f:
+                f.write(dd_html)
+                print("Wrote debug_dates_deadlines.html")
             break
         except Exception:
             continue
@@ -652,6 +656,8 @@ def main():
     ap.add_argument("--credentials", type=str, default="credentials.json", help="OAuth credentials JSON path.")
     ap.add_argument("--token", type=str, default="token.json", help="OAuth token cache path.")
     ap.add_argument("--dry-run", action="store_true", help="Print what would be created, but do not write to Google Calendar.")
+    ap.add_argument("--debug", action="store_true", help="Enable debug logging/dumps.")
+
     args = ap.parse_args()
 
     payload = build_term_events(args.year, args.semester)
