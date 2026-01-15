@@ -476,6 +476,39 @@ def instructional_week_events(
 
     return events
 
+def extract_subsection(block_text: str, header: str) -> str:
+    """
+    Given a term block (e.g., Spring 2026 section), extract the subsection that starts
+    at a line exactly equal to `header` and continues until the next recognized subsection header.
+    If the header is not found, returns the original block_text.
+    """
+    lines = block_text.splitlines()
+    lines = [l.strip() for l in lines if l.strip()]
+
+    # Common subheaders used on these pages (extend if needed)
+    subsection_headers = {
+        "All Parts of Term",
+        "Winter Intersession",
+        "Full Part of Term",
+        "1st Half Part of Term",
+        "2nd Half Part of Term",
+        "Pre Summer Part of Term",
+        "Extended Summer Part of Term",
+    }
+
+    try:
+        start = next(i for i, l in enumerate(lines) if l == header)
+    except StopIteration:
+        return block_text
+
+    end = len(lines)
+    for i in range(start + 1, len(lines)):
+        if lines[i] in subsection_headers:
+            end = i
+            break
+
+    return "\n".join(lines[start:end])
+
 
 # -----------------------------
 # Main orchestration
@@ -491,6 +524,7 @@ def build_term_events(year: int, semester: str) -> Dict[str, object]:
     ay_url = f"{ACADEMIC_BASE}/{ay_slug}"
     academic_html = fetch_html(ay_url)
     term_text = extract_term_block_text(academic_html, year, semester)
+    term_text = extract_subsection(term_text, "Full Part of Term")
 
     # Extract key dates/ranges
     first_day = find_bullet_date(term_text, "First Day of Classes")
