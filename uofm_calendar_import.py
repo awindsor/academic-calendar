@@ -283,7 +283,7 @@ def parse_deadlines_drop_withdraw(dates_html: str) -> Tuple[Optional[date], Opti
     """
     print("Starting Parsing Deadlines")
     soup = BeautifulSoup(dates_html, "html.parser")
-    print(f"Soup: {soup}")
+    # print(f"Soup: {soup}")
 
     txt = soup.get_text("\n")
     #print(f"txt: {txt}")
@@ -313,7 +313,6 @@ def parse_deadlines_drop_withdraw(dates_html: str) -> Tuple[Optional[date], Opti
             in_drop = False
             in_withdraw = True
             continue
-        print(l)
         # Grab the first FULL line in each section (ignore WIN, 1ST, 2ND, TN eCampus, etc.)
         if in_drop and full_drop_line is None and re.match(r"^\s*FULL\b", l):
             full_drop_line = l
