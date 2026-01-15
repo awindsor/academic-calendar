@@ -275,27 +275,32 @@ def find_any_labeled_ranges(term_text: str, labels: List[str]) -> List[Tuple[str
 def parse_deadlines_drop_withdraw(dates_html: str) -> Tuple[Optional[date], Optional[date]]:
     """
     From Dates & Deadlines page, extract FULL:
-      - Drop Period ... FULL - <date> OR FULL - <start> - <end>
-      - Withdrawal Period ... FULL - <start> - <end>
+      - Drop Period (no grade) -> end date of FULL range
+      - Withdrawal Period ("W") -> end date of FULL range
 
     Returns:
       (last_day_drop_no_grade, last_day_withdraw_W)
     """
     soup = BeautifulSoup(dates_html, "html.parser")
     txt = soup.get_text("\n")
-    lines = [normalize_whitespace(l) for l in txt.splitlines() if normalize_whitespace(l)]
 
-    # Capture lines like:
-    # "FULL - September 7, 2025"
-    # "FULL  -  January 20 - February 2, 2026" (varies)
+    raw_lines = [normalize_whitespace(l) for l in txt.splitlines()]
+    raw_lines = [l for l in raw_lines if l]
+
+    def strip_bullets(s: str) -> str:
+        # Remove common bullet/list prefixes while preserving content
+        return re.sub(r"^[\s\-\*\u2022\u00B7]+", "", s).strip()
+
+    lines = [strip_bullets(l) for l in raw_lines]
+
+    # Identify sections by scanning text
+    in_drop = False
+    in_withdraw = False
     full_drop_line = None
     full_withdraw_line = None
 
-    in_drop = False
-    in_withdraw = False
     for l in lines:
-        if re.search(r"Drop\s*/\s*Withdraw Deadlines", l, re.IGNORECASE):
-            continue
+        # Section toggles (these strings appear on the page)
         if re.search(r"Drop Period", l, re.IGNORECASE):
             in_drop = True
             in_withdraw = False
@@ -305,52 +310,55 @@ def parse_deadlines_drop_withdraw(dates_html: str) -> Tuple[Optional[date], Opti
             in_withdraw = True
             continue
 
-        if in_drop and re.match(r"^FULL\b", l):
+        # Grab the first FULL line in each section (ignore WIN, 1ST, 2ND, TN eCampus, etc.)
+        if in_drop and full_drop_line is None and re.match(r"^FULL\b", l):
             full_drop_line = l
-        if in_withdraw and re.match(r"^FULL\b", l):
+            continue
+        if in_withdraw and full_withdraw_line is None and re.match(r"^FULL\b", l):
             full_withdraw_line = l
+            continue
 
-        # stop once we have both
         if full_drop_line and full_withdraw_line:
             break
 
-    def extract_end_date(line: str) -> Optional[date]:
+    def extract_end_date_from_full_line(line: Optional[str]) -> Optional[date]:
         if not line:
             return None
-        # remove leading "FULL -"
-        line2 = re.sub(r"^FULL\s*[-–]?\s*", "", line).strip()
-        # Cases:
-        # 1) "September 7, 2025"
-        # 2) "January 20 - February 2, 2026"
-        # 3) "September 8 - November 15, 2025"
-        # Normalize
-        line2 = line2.replace("–", "-")
-        # If it contains a comma-year, parse as single date
-        if re.search(r"\d{4}", line2) and "," in line2 and "-" not in line2:
-            return parse_month_day_year(line2)
-        # Range like "January 20 - February 2, 2026" (two months)
-        m = re.match(r"^([A-Za-z]+)\s+\d{1,2}\s*-\s*([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$", line2)
+
+        # Remove leading "FULL" and separators
+        # Examples:
+        #   "FULL  -  January 20 - February 2, 2026"
+        #   "FULL  -  February 3 - April 11, 2026"
+        rest = re.sub(r"^FULL\b", "", line).strip()
+        rest = re.sub(r"^[\s\-–:]+", "", rest).strip()
+        rest = rest.replace("–", "-")
+        rest = normalize_whitespace(rest)
+
+        # Case A: single date "Month d, yyyy"
+        if re.fullmatch(r"[A-Za-z]+\s+\d{1,2},\s*\d{4}", rest):
+            return parse_month_day_year(rest)
+
+        # Case B: range with two months "January 20 - February 2, 2026"
+        m = re.fullmatch(r"([A-Za-z]+)\s+(\d{1,2})\s*-\s*([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})", rest)
         if m:
-            mon2, d2, yyyy = m.group(2), int(m.group(3)), int(m.group(4))
-            return dateparser.parse(f"{mon2} {d2}, {yyyy}").date()
-        # Range like "September 8 - November 15, 2025"
-        m = re.match(r"^([A-Za-z]+)\s+\d{1,2}\s*-\s*([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$", line2)
+            end_mon, end_day, end_year = m.group(3), int(m.group(4)), int(m.group(5))
+            return dateparser.parse(f"{end_mon} {end_day}, {end_year}").date()
+
+        # Case C: range same month "March 16-29, 2026" or "March 16 - 29, 2026"
+        m = re.fullmatch(r"([A-Za-z]+)\s+(\d{1,2})\s*-\s*(\d{1,2}),\s*(\d{4})", rest)
         if m:
-            mon2, d2, yyyy = m.group(2), int(m.group(3)), int(m.group(4))
-            return dateparser.parse(f"{mon2} {d2}, {yyyy}").date()
-        # Range like "March 16-29, 2026" (same month)
-        m = re.match(r"^([A-Za-z]+)\s+(\d{1,2})\s*-\s*(\d{1,2}),\s*(\d{4})$", line2)
-        if m:
-            mon, d2, yyyy = m.group(1), int(m.group(3)), int(m.group(4))
-            return dateparser.parse(f"{mon} {d2}, {yyyy}").date()
-        # Fallback: try fuzzy parse of last date-like substring
-        candidates = re.findall(r"[A-Za-z]+\s+\d{1,2},\s+\d{4}", line2)
+            mon, end_day, end_year = m.group(1), int(m.group(3)), int(m.group(4))
+            return dateparser.parse(f"{mon} {end_day}, {end_year}").date()
+
+        # Fallback: pick the last explicit "Month d, yyyy" if present
+        candidates = re.findall(r"[A-Za-z]+\s+\d{1,2},\s*\d{4}", rest)
         if candidates:
             return parse_month_day_year(candidates[-1])
+
         return None
 
-    last_drop = extract_end_date(full_drop_line) if full_drop_line else None
-    last_withdraw = extract_end_date(full_withdraw_line) if full_withdraw_line else None
+    last_drop = extract_end_date_from_full_line(full_drop_line)
+    last_withdraw = extract_end_date_from_full_line(full_withdraw_line)
     return last_drop, last_withdraw
 
 
