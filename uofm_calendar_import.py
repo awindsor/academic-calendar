@@ -301,7 +301,6 @@ def parse_deadlines_drop_withdraw(dates_html: str) -> Tuple[Optional[date], Opti
 
     for l in lines:
         # Section toggles (these strings appear on the page)
-        strip_bullets(l)
         if re.search(r"Drop Period", l, re.IGNORECASE):
             in_drop = True
             in_withdraw = False
