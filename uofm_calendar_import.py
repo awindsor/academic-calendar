@@ -210,8 +210,8 @@ def extract_term_block_text(academic_html: str, year: int, semester: str) -> str
     """
     soup = BeautifulSoup(academic_html, "html.parser")
     full_text = soup.get_text("\n")
-    lines = [normalize_whitespace(l) for l in full_text.splitlines()]
-    lines = [l for l in lines if l]
+    lines = [normalize_whitespace(line) for line in full_text.splitlines()]
+    lines = [line for line in lines if line]
 
     semester = semester.lower()
     if semester == "spring":
@@ -302,8 +302,18 @@ def parse_deadlines_drop_withdraw(dates_html: str) -> Tuple[Optional[date], Opti
     in_withdraw = False
     full_drop_line = None
     full_withdraw_line = None
+    full_drop_line_next = False
+    full_withdraw_line_next = False
 
     for l in lines:
+        if full_drop_line_next:
+            full_drop_line = l
+            full_drop_line_next = False
+            continue
+        if full_withdraw_line_next:
+            full_withdraw_line = l
+            full_withdraw_line_next = False
+            continue
         # Section toggles (these strings appear on the page)
         if re.search(r"Drop Period", l, re.IGNORECASE):
             in_drop = True
@@ -315,10 +325,10 @@ def parse_deadlines_drop_withdraw(dates_html: str) -> Tuple[Optional[date], Opti
             continue
         # Grab the first FULL line in each section (ignore WIN, 1ST, 2ND, TN eCampus, etc.)
         if in_drop and full_drop_line is None and re.match(r"^\s*FULL\b", l):
-            full_drop_line = l
+            full_drop_line_next = True 
             continue
         if in_withdraw and full_withdraw_line is None and re.match(r"^\s*FULL\b", l):
-            full_withdraw_line = l
+            full_withdraw_line_next = True
             continue
 
         if full_drop_line and full_withdraw_line:
@@ -540,7 +550,7 @@ def extract_subsection(block_text: str, header: str) -> str:
 # Main orchestration
 # -----------------------------
 
-def build_term_events(year: int, semester: str) -> Dict[str, object]:
+def build_term_events(year: int, semester: str, debug: bool = False) -> Dict[str, object]:
     semester = semester.lower()
     if semester not in {"fall", "spring"}:
         raise ValueError("semester must be 'fall' or 'spring'")
@@ -597,7 +607,7 @@ def build_term_events(year: int, semester: str) -> Dict[str, object]:
         try:
             dd_html = fetch_html(u)
             dd_url_used = u
-            if args.debug:
+            if debug:
                 with open("debug_dates_deadlines.html", "w", encoding="utf-8") as f:
                     f.write(dd_html)
                     print("Wrote debug_dates_deadlines.html")
